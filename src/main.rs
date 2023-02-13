@@ -1,3 +1,4 @@
+#![allow(unused, dead_code)]
 pub mod consts;
 pub mod lexer;
 
