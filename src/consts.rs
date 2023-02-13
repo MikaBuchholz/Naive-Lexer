@@ -1,5 +1,5 @@
-use crate::LiteralToken;
-use crate::Token;
+use crate::lexer::LiteralToken;
+use crate::lexer::Token;
 
 pub const STRICT_KEYWORDS: &'static [&'static str] = &[
     "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for",
@@ -41,6 +41,10 @@ pub const LITERAL_TOKENS: &'static [LiteralToken] = &[
     LiteralToken {
         literal_token: "]",
         token_kind: Token::CloseSqaureBrackets,
+    },
+    LiteralToken {
+        literal_token: "&&",
+        token_kind: Token::And,
     },
     LiteralToken {
         literal_token: "&",
@@ -95,10 +99,6 @@ pub const LITERAL_TOKENS: &'static [LiteralToken] = &[
         token_kind: Token::Dollar,
     },
     LiteralToken {
-        literal_token: "!",
-        token_kind: Token::Not,
-    },
-    LiteralToken {
         literal_token: "==",
         token_kind: Token::Eq,
     },
@@ -110,7 +110,13 @@ pub const LITERAL_TOKENS: &'static [LiteralToken] = &[
         literal_token: "=",
         token_kind: Token::AssignOp,
     },
+    LiteralToken {
+        literal_token: "!",
+        token_kind: Token::Not,
+    },
 ];
+
+//Some tokens are missing - too lazy
 
 pub const LITERAL_TOKENS_LEN: usize = LITERAL_TOKENS.len();
 
