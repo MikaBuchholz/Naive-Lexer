@@ -1,67 +1,17 @@
+mod consts;
+
 use std::{
     fs::File,
     io::{BufReader, Read},
 };
 
-const STRICT_KEYWORDS: &'static [&'static str] = &[
-    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for",
-    "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return",
-    "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where",
-    "while", "async", "await", "dyn",
-];
+use consts::{
+    COMMENT_IDENTIFIER, LITERAL_TOKENS, LITERAL_TOKENS_LEN, RESERVED_KEYWORDS, STRICT_KEYWORDS,
+    STRING_IDENTIFIER,
+};
 
-const RESERVED_KEYWORDS: &'static [&'static str] = &[
-    "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized",
-    "virtual", "yield", "try",
-];
-
-const LITERAL_TOKENS: &'static [LiteralToken] = &[
-    LiteralToken {
-        literal_token: "(",
-        token_kind: Token::OpenParen,
-    },
-    LiteralToken {
-        literal_token: ")",
-        token_kind: Token::CloseParen,
-    },
-    LiteralToken {
-        literal_token: "{",
-        token_kind: Token::OpenCurley,
-    },
-    LiteralToken {
-        literal_token: "}",
-        token_kind: Token::CloseCurley,
-    },
-    LiteralToken {
-        literal_token: ";",
-        token_kind: Token::Semicolon,
-    },
-    LiteralToken {
-        literal_token: "[",
-        token_kind: Token::OpenSqaureBrackets,
-    },
-    LiteralToken {
-        literal_token: "]",
-        token_kind: Token::CloseSqaureBrackets,
-    },
-    LiteralToken {
-        literal_token: "&",
-        token_kind: Token::Ampersand,
-    },
-    LiteralToken {
-        literal_token: "'",
-        token_kind: Token::SingleQuote,
-    },
-];
-
-const LITERAL_TOKENS_LEN: usize = LITERAL_TOKENS.len();
-
-const COMMENT_IDENTIFIER: &'static str = "//";
-const STRING_IDENTIFIER: char = '"';
-
-#[allow(unused)]
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
-enum Token {
+pub enum Token {
     Unknown,
     End,
     StrictKeyword,
@@ -78,10 +28,25 @@ enum Token {
     CloseSqaureBrackets,
     Ampersand,
     SingleQuote,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    Colon,
+    Comma,
+    Arrow,
+    DoubleColon,
+    FatArrow,
+    Question,
+    Dollar,
+    Not,
+    AssignOp,
+    Ne,
+    Eq,
 }
 
 #[derive(Debug)]
-struct LiteralToken<'a> {
+pub struct LiteralToken<'a> {
     literal_token: &'a str,
     token_kind: Token,
 }
@@ -95,7 +60,7 @@ struct Loc {
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
-struct TokenInfo {
+pub struct TokenInfo {
     token: Token,
     collected: String,
     loc: Loc,
@@ -108,14 +73,6 @@ struct Lexer {
     cursor: usize,
     line: usize,
     collected: String,
-}
-
-#[allow(unused)]
-#[derive(Debug)]
-struct BracketMismatch {
-    found: Token,
-    expected: Token,
-    loc: Loc,
 }
 
 #[derive(Debug)]
@@ -133,14 +90,6 @@ macro_rules! repeat {
     }};
 }
 
-#[allow(dead_code)]
-fn file_handling(path: &str) -> Result<File, std::io::Error> {
-    match File::open(path) {
-        Ok(f) => return Ok(f),
-        Err(err) => Err(err),
-    }
-}
-
 impl Lexer {
     pub fn new(content: String) -> Self {
         Self {
@@ -154,7 +103,7 @@ impl Lexer {
 
     pub fn from_path(path: &str) -> Result<Self, std::io::Error> {
         let mut buffer = String::new();
-        let mut buffer_reader = BufReader::new(file_handling(path)?);
+        let mut buffer_reader = BufReader::new(File::open(path)?);
 
         buffer_reader.read_to_string(&mut buffer)?;
 
@@ -182,7 +131,7 @@ impl Lexer {
     fn consume(&mut self, len: usize) -> Result<LexerStatus, LexerStatus> {
         if self.cursor + len > self.content_len {
             return Err(LexerStatus::LenOutOfBounds(format!(
-                "Provided `len`: {len} is too large for `content_len`: {}",
+                "Provided `len`: {len} is too large for `content_len`: {}", //TODO Make this better
                 self.content_len
             )));
         }
@@ -278,11 +227,13 @@ impl Lexer {
             self.trim_while_empty()?;
 
             if self.current()? == STRING_IDENTIFIER {
-                self.advance_cursor()?;
+                self.consume(1)?;
 
                 while self.current()? != STRING_IDENTIFIER && !self.current()?.is_line_break() {
                     self.consume(1)?;
                 }
+
+                self.consume(1)?;
 
                 let (loc, collected) = self.get_loc();
 
@@ -313,7 +264,7 @@ impl Lexer {
 
             for i in 0..LITERAL_TOKENS_LEN {
                 if self.content_starts_with(LITERAL_TOKENS[i].literal_token)? {
-                    self.consume(1)?;
+                    self.consume(LITERAL_TOKENS[i].literal_token.len())?;
                     let (loc, collected) = self.get_loc();
 
                     return Ok(TokenInfo {
@@ -349,16 +300,6 @@ impl Lexer {
             }
 
             self.advance_cursor()?;
-
-            let (loc, collected) = self.get_loc();
-
-            if collected.len() != 0 {
-                return Ok(TokenInfo {
-                    token: Token::Unknown,
-                    collected,
-                    loc,
-                });
-            }
         }
         Ok(TokenInfo {
             token: Token::End,
@@ -371,15 +312,20 @@ impl Lexer {
     }
 
     pub fn collect_tokens(&mut self) -> Result<Vec<TokenInfo>, LexerStatus> {
-        let mut t = self.next()?;
+        let mut current = self.next()?;
 
-        let mut v: Vec<TokenInfo> = Vec::new();
+        let mut tokens: Vec<TokenInfo> = Vec::new();
 
-        while t.token != Token::End {
-            v.push(t.clone());
-            t = self.next()?;
+        while current.token != Token::End {
+            tokens.push(current.clone());
+            current = self.next()?;
         }
-        Ok(v)
+
+        Ok(tokens)
+    }
+
+    pub fn get_content(&self) -> String {
+        self.content.clone()
     }
 }
 
@@ -414,11 +360,23 @@ fn main() {
     }"
     .into();
 
-    let mut lexer = Lexer::new(input.clone());
+    let mut lexer = Lexer::new(input);
 
     let toks = lexer.collect_tokens().unwrap();
 
+    let content = lexer.get_content();
+
     for tok in toks {
-        println!("{:?}", input.get(tok.loc.token_pos))
+        println!(
+            "{}\t{:?}",
+            content.get(tok.loc.token_pos).unwrap().trim(),
+            tok.token
+        )
     }
+
+    //TODO Context analisys of tokens like & and < > []
+    //TODO Add missing tokens, += + - / * and more   []
+    //TODO Implement bracket balancer                []
+    //TODO Rework lexer error enum                   []
+    //TODO Maybe add documentation to functions      []
 }
