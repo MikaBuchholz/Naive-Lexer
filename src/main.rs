@@ -7,7 +7,7 @@ use crate::lexer::Lexer;
 fn main() {
     let input: String = "fn main() {
         if a > b {
-            println!(\"Ass\");
+            println!(\"Add\");
         }
     } "
     .into();
