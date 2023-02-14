@@ -241,7 +241,7 @@ impl Lexer {
         )
     }
 
-    fn next(&mut self) -> Result<TokenInfo, LexerStatus> {
+    pub fn next(&mut self) -> Result<TokenInfo, LexerStatus> {
         while self.cursor + 1 < self.content_len {
             self.trim_while_empty()?;
 
